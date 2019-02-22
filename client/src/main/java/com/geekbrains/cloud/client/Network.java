@@ -7,12 +7,12 @@ import io.netty.handler.codec.serialization.ObjectEncoderOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
-public class Network {
+class Network {
     private static Socket socket;
     private static ObjectEncoderOutputStream out;
     private static ObjectDecoderInputStream in;
 
-    public static void start() {
+    static void start() {
         try {
             socket = new Socket("localhost", 8189);
             out = new ObjectEncoderOutputStream(socket.getOutputStream());
@@ -22,7 +22,7 @@ public class Network {
         }
     }
 
-    public static void stop() {
+    static void stop() {
         try {
             out.close();
         } catch (IOException e) {
@@ -40,7 +40,7 @@ public class Network {
         }
     }
 
-    public static boolean sendMsg(AbstractMessage msg) {
+    static boolean sendMsg(AbstractMessage msg) {
         try {
             out.writeObject(msg);
             return true;
@@ -50,7 +50,7 @@ public class Network {
         return false;
     }
 
-    public static AbstractMessage readObject() throws ClassNotFoundException, IOException {
+    static AbstractMessage readObject() throws ClassNotFoundException, IOException {
         Object obj = in.readObject();
         return (AbstractMessage) obj;
     }

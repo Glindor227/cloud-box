@@ -1,14 +1,14 @@
 package com.geekbrains.cloud.client;
 
-import com.geekbrains.cloud.command.AbstractMessage;
-import com.geekbrains.cloud.command.FileMessage;
-import com.geekbrains.cloud.command.FileRequest;
+import com.geekbrains.cloud.command.*;
 import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.ListView;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
 
 import java.io.IOException;
 import java.net.URL;
@@ -18,21 +18,25 @@ import java.nio.file.StandardOpenOption;
 import java.util.ResourceBundle;
 
 public class MainController implements Initializable {
-    @FXML
-    TextField tfFileName;
 
     @FXML
-    ListView<String> filesList;
+    ListView<String> filesListLocal,filesListServer;
+
+    @FXML
+    TextField loginField;
+
+    @FXML
+    PasswordField passField;
+
+    @FXML
+    HBox authPanel,filesPanel;
+
+
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        setAuthenticated(false);
         Network.start();
-//        new Thread(new Runnable() {
-//            @Override
-//            public void run() {
-//                NettyNetwork.getInstance().start();
-//            }
-//        }).start();
 
         Thread t = new Thread(() -> {
             try {
@@ -43,6 +47,31 @@ public class MainController implements Initializable {
                         Files.write(Paths.get("client_storage/" + fm.getFilename()), fm.getData(), StandardOpenOption.CREATE);
                         refreshLocalFilesList();
                     }
+                    if(am  instanceof AutoRezult){
+                        AutoRezult ar = (AutoRezult) am;
+                        if (ar.getRezult()) {
+                            setAuthenticated(true);
+                            System.out.println("Авторизация прошла");
+                            Network.sendMsg(new FilesListRequest());
+                            System.out.println("Запросили список файлов");
+                        }else
+                        {
+                            System.out.println("Авторизация неудачна");
+                        }
+
+                    }
+                    if(am instanceof FilesListRezult) {
+                        FilesListRezult flr = (FilesListRezult) am;
+                        System.out.println("Получили список файлов(количество="+flr.getFileList().size()+")");
+                        Platform.runLater(() -> {
+                            filesListServer.getItems().clear();
+                            for (String fName : flr.getFileList()) {
+                                filesListServer.getItems().add(fName);
+                            }
+                        });
+                    }
+
+
                 }
             } catch (ClassNotFoundException | IOException e) {
                 e.printStackTrace();
@@ -55,30 +84,64 @@ public class MainController implements Initializable {
         refreshLocalFilesList();
     }
 
+    private void setAuthenticated(boolean authenticated) {
+        authPanel.setVisible(!authenticated);
+        authPanel.setManaged(!authenticated);
+        filesPanel.setVisible(authenticated);
+        filesPanel.setManaged(authenticated);
+    }
+
+
+
+    public void sendAuth(ActionEvent actionEvent) {
+        Network.sendMsg(new SetAuto(loginField.getText(),passField.getText()));
+        loginField.clear();
+        passField.clear();
+
+    }
+
+    //скачать файл
     public void pressOnDownloadBtn(ActionEvent actionEvent) {
-        if (tfFileName.getLength() > 0) {
-            Network.sendMsg(new FileRequest("login1","pass1",tfFileName.getText()));
-            tfFileName.clear();
+        String selName = filesListServer.getSelectionModel().getSelectedItem();
+        if ((selName!=null)&&(selName.length() > 0)) {
+            System.out.println("Запрашиваем в сервера" + selName);
+            Network.sendMsg(new FileRequest(selName));
         }
     }
 
-//    public void pressOnSendData(ActionEvent actionEvent) {
-//        NettyNetwork.getInstance().sendData();
-//    }
+    public void pressOnSendBtn(ActionEvent actionEvent) {
+        String selName = filesListLocal.getSelectionModel().getSelectedItem();
+        if ((selName!=null)&&(selName.length() > 0)) {
+            System.out.println("Отправляем на сервер" + selName);
+            try {
+                FileMessage fm = new FileMessage(Paths.get("client_storage/"+selName));
+                Network.sendMsg(fm);
+                Network.sendMsg(new FilesListRequest());
 
-    public void refreshLocalFilesList() {
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+    }
+
+
+
+    private void refreshLocalFilesList() {
+        System.out.println("refreshLocalFilesList");
         if (Platform.isFxApplicationThread()) {
             try {
-                filesList.getItems().clear();
-                Files.list(Paths.get("client_storage")).map(p -> p.getFileName().toString()).forEach(o -> filesList.getItems().add(o));
+                filesListLocal.getItems().clear();
+                Files.list(Paths.get("client_storage")).map(p -> p.getFileName().toString()).forEach(o -> filesListLocal.getItems().add(o));
             } catch (IOException e) {
                 e.printStackTrace();
             }
         } else {
             Platform.runLater(() -> {
                 try {
-                    filesList.getItems().clear();
-                    Files.list(Paths.get("client_storage")).map(p -> p.getFileName().toString()).forEach(o -> filesList.getItems().add(o));
+                    filesListLocal.getItems().clear();
+                    Files.list(Paths.get("client_storage")).map(p -> p.getFileName().toString()).forEach(o -> filesListLocal.getItems().add(o));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
