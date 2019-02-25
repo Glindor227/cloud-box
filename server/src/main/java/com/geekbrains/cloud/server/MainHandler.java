@@ -7,9 +7,11 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.ReferenceCountUtil;
 
 import javax.security.sasl.AuthenticationException;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.stream.Collectors;
 
 public class MainHandler extends ChannelInboundHandlerAdapter {
     private String login="";
@@ -27,15 +29,21 @@ public class MainHandler extends ChannelInboundHandlerAdapter {
                 if(AuthService.ExistLoginAndPassword(sa.getLogin(),sa.getPassword())){
                     System.out.println("Авторизация "+sa.getLogin()+"/"+sa.getPassword()+" прошла успешно");
                     login = sa.getLogin();
-                    ctx.writeAndFlush(new AutoRezult(true));
+                    ctx.writeAndFlush(new ResultOfAuto(true));
+                    sendFilesListToClient(ctx);
                 }else {
                     System.out.println("Авторизация "+sa.getLogin()+"/"+sa.getPassword()+" НЕ ПРОШЛА");
-                    ctx.writeAndFlush(new AutoRezult(false));
+                    ctx.writeAndFlush(new ResultOfAuto(false));
                 }
             }
+            if (login.length() == 0) {
+                System.out.println("Аутентификации не было");
+                ctx.writeAndFlush(new Error("Аутентификации не было"));
+                return;
+            }
+
             if (msg instanceof FileRequest) {
                 System.out.println("Пришло FileRequest");
-                CheckAuthentication(ctx);
 
                 FileRequest fr = (FileRequest) msg;
                 String filePath = "server_storage/"+ login +"/"+fr.getFilename();
@@ -47,16 +55,10 @@ public class MainHandler extends ChannelInboundHandlerAdapter {
             }
             if (msg instanceof FilesListRequest) {
                 System.out.println("Пришло FilesListRequest");
-                CheckAuthentication(ctx);
-                String sPath = "server_storage/"+ login;
-                FilesListRezult filesListClass = new FilesListRezult();
-                Files.list(Paths.get(sPath)).map(p -> p.getFileName().toString()).forEach(o -> filesListClass.AddFile(o));
-                System.out.println("Готов список из "+filesListClass.getFileList().size()+"файлов");
-                ctx.writeAndFlush(filesListClass);
+                sendFilesListToClient(ctx);
             }
             if (msg instanceof FileMessage) {
                 System.out.println("Пришло FileMessage");
-                CheckAuthentication(ctx);
                 FileMessage fm = (FileMessage) msg;
                 String sPath = "server_storage/"+ login+"/";
                 try {
@@ -64,24 +66,26 @@ public class MainHandler extends ChannelInboundHandlerAdapter {
                 }catch (Exception e){
                     System.out.println("Почемуто не записали на сервер файл");
                     e.printStackTrace();
+                    ctx.writeAndFlush(new Error("Почемуто не записали на сервер файл"));
                 }
+                sendFilesListToClient(ctx);
 
             }
 
-        }catch (AuthenticationException e){
-            System.out.println("не было авторизации");
+        }catch (IOException e){
+            e.printStackTrace();
         }
         finally {
             ReferenceCountUtil.release(msg);
         }
     }
 
-    private void CheckAuthentication(ChannelHandlerContext ctx) throws AuthenticationException {
-        if (login.length() == 0) {
-            System.out.println("Аутентификации не было");
-            ctx.writeAndFlush(new Error("Аутентификации не было"));
-            throw new AuthenticationException();
-        }
+    private void sendFilesListToClient(ChannelHandlerContext ctx) throws IOException {
+        String sPath = "server_storage/"+ login;
+        FilesListRezult filesListClass = new  FilesListRezult(Files.list(Paths.get(sPath)).map(p -> p.getFileName().toString()).collect(Collectors.toList()));
+        System.out.println("Готов список из "+filesListClass.getFileList().size()+"файлов");
+        ctx.writeAndFlush(filesListClass);
+
     }
 
     @Override

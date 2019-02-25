@@ -1,19 +1,24 @@
 package com.geekbrains.cloud.command;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class FilesListRezult extends AbstractMessage {
-    private ArrayList<String> fileList;
+    private List<String> fileList;
 
-    public FilesListRezult() {
+/*    public FilesListRezult() {
         fileList= new ArrayList<>();
     }
+*/
+    public FilesListRezult(List<String> fileList) {
+        this.fileList = fileList;
+    }
 
-    public ArrayList<String> getFileList() {
+    public List<String> getFileList() {
         return fileList;
     }
-    public void AddFile(String newFile){
+/*    public void AddFile(String newFile){
         fileList.add(newFile);
     }
-
+*/
 }

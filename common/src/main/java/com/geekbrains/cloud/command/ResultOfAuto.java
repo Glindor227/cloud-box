@@ -1,6 +1,6 @@
 package com.geekbrains.cloud.command;
 
-public class AutoRezult extends AbstractMessage {
+public class ResultOfAuto extends AbstractMessage {
     private Boolean rezult;
 
     public Boolean getRezult() {
@@ -8,8 +8,7 @@ public class AutoRezult extends AbstractMessage {
     }
 
 
-    public AutoRezult(Boolean rezult) {
+    public ResultOfAuto(Boolean rezult) {
         this.rezult = rezult;
     }
 }
-

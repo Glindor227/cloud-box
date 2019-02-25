@@ -47,13 +47,12 @@ public class MainController implements Initializable {
                         Files.write(Paths.get("client_storage/" + fm.getFilename()), fm.getData(), StandardOpenOption.CREATE);
                         refreshLocalFilesList();
                     }
-                    if(am  instanceof AutoRezult){
-                        AutoRezult ar = (AutoRezult) am;
+                    if(am  instanceof ResultOfAuto){
+                        ResultOfAuto ar = (ResultOfAuto) am;
                         if (ar.getRezult()) {
                             setAuthenticated(true);
                             System.out.println("Авторизация прошла");
-                            Network.sendMsg(new FilesListRequest());
-                            System.out.println("Запросили список файлов");
+                            refreshLocalFilesList();
                         }else
                         {
                             System.out.println("Авторизация неудачна");
@@ -65,9 +64,7 @@ public class MainController implements Initializable {
                         System.out.println("Получили список файлов(количество="+flr.getFileList().size()+")");
                         Platform.runLater(() -> {
                             filesListServer.getItems().clear();
-                            for (String fName : flr.getFileList()) {
-                                filesListServer.getItems().add(fName);
-                            }
+                            filesListServer.getItems().addAll(flr.getFileList());
                         });
                     }
 
@@ -81,7 +78,7 @@ public class MainController implements Initializable {
         });
         t.setDaemon(true);
         t.start();
-        refreshLocalFilesList();
+//        refreshLocalFilesList();
     }
 
     private void setAuthenticated(boolean authenticated) {
@@ -116,7 +113,6 @@ public class MainController implements Initializable {
             try {
                 FileMessage fm = new FileMessage(Paths.get("client_storage/"+selName));
                 Network.sendMsg(fm);
-                Network.sendMsg(new FilesListRequest());
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -127,17 +123,18 @@ public class MainController implements Initializable {
     }
 
 
-
+//сжимается. но как?
     private void refreshLocalFilesList() {
         System.out.println("refreshLocalFilesList");
-        if (Platform.isFxApplicationThread()) {
+/*        if (Platform.isFxApplicationThread()) {
             try {
                 filesListLocal.getItems().clear();
                 Files.list(Paths.get("client_storage")).map(p -> p.getFileName().toString()).forEach(o -> filesListLocal.getItems().add(o));
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        } else {
+        } else
+*/         {
             Platform.runLater(() -> {
                 try {
                     filesListLocal.getItems().clear();
