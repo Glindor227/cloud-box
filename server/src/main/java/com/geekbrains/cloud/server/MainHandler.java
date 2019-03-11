@@ -6,86 +6,90 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.ReferenceCountUtil;
 
-import javax.security.sasl.AuthenticationException;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.stream.Collectors;
 
 public class MainHandler extends ChannelInboundHandlerAdapter {
-    private String login="";
+    private String userDir="";
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(ChannelHandlerContext ctx, Object msg){
         try {
             if (msg == null) {
                 return;
             }
-            System.out.println("Пришло сообщение для  "+login);
-            if(msg instanceof SetAuto){
-                System.out.println("Пришло SetAuto");
-                SetAuto sa = (SetAuto)msg;
-                AuthService AuthService = new DBAuthService();
-                if(AuthService.ExistLoginAndPassword(sa.getLogin(),sa.getPassword())){
-                    System.out.println("Авторизация "+sa.getLogin()+"/"+sa.getPassword()+" прошла успешно");
-                    login = sa.getLogin();
-                    ctx.writeAndFlush(new ResultOfAuto(true));
-                    sendFilesListToClient(ctx);
-                }else {
-                    System.out.println("Авторизация "+sa.getLogin()+"/"+sa.getPassword()+" НЕ ПРОШЛА");
-                    ctx.writeAndFlush(new ResultOfAuto(false));
-                }
+            if (msg instanceof String) {
+                userDir = (String)msg;
+                System.out.println("Получили поддериктоию для работы клиента - " + userDir);
             }
-            if (login.length() == 0) {
-                System.out.println("Аутентификации не было");
-                ctx.writeAndFlush(new Error("Аутентификации не было"));
-                return;
-            }
+
 
             if (msg instanceof FileRequest) {
                 System.out.println("Пришло FileRequest");
 
                 FileRequest fr = (FileRequest) msg;
-                String filePath = "server_storage/"+ login +"/"+fr.getFilename();
+                String filePath = "server_storage/"+ userDir +"/"+fr.getFilename();
                 System.out.println("Запрос файла "+filePath);
                 if (Files.exists(Paths.get(filePath))) {
+
+                    //Разбитие файлов на части реализовано внутри FileMessage в проекте "common"
                     FileMessage fm = new FileMessage(Paths.get(filePath));
-                    ctx.writeAndFlush(fm);
+                    while(fm.next()) {
+                        ctx.writeAndFlush(fm);
+                    }
                 }
+            }
+            if (msg instanceof FileDelete) {
+                System.out.println("Пришло FileDelete");
+
+                FileDelete fd = (FileDelete) msg;
+                String filePath = "server_storage/"+ userDir +"/"+fd.getFilename();
+                System.out.println("Запрос файла "+filePath);
+                if (Files.deleteIfExists(Paths.get(filePath)))
+                {
+                    (new FilesListCommon()).sendFilesListToClient(userDir,ctx);
+                }
+                else{
+                    ctx.writeAndFlush(new Error("Не смогли удалить файл '" + fd.getFilename()+"'"));
+                }
+
             }
             if (msg instanceof FilesListRequest) {
                 System.out.println("Пришло FilesListRequest");
-                sendFilesListToClient(ctx);
+                (new FilesListCommon()).sendFilesListToClient(userDir,ctx);
             }
             if (msg instanceof FileMessage) {
                 System.out.println("Пришло FileMessage");
                 FileMessage fm = (FileMessage) msg;
-                String sPath = "server_storage/"+ login+"/";
+                String sPath = "server_storage/"+ userDir+"/";
                 try {
-                    Files.write(Paths.get(sPath + fm.getFilename()), fm.getData(), StandardOpenOption.CREATE);
+                    if(fm.getFirstPart()){
+                        System.out.println("Пришло начало файл("+fm.getFilename()+") - "+(fm.getEndPart()?"Это же и окончание":""));
+                        Files.write(Paths.get(sPath + fm.getFilename()), fm.getData(), StandardOpenOption.CREATE);
+                    }
+                    else{
+                        System.out.println("Пришла часть файла("+fm.getFilename()+") - "+(fm.getEndPart()?"Окончание":"середина"));
+                        Files.write(Paths.get(sPath + fm.getFilename()), fm.getData(), StandardOpenOption.APPEND);
+                    }
+                    if(fm.getEndPart())
+                        (new FilesListCommon()).sendFilesListToClient(userDir,ctx);
                 }catch (Exception e){
                     System.out.println("Почемуто не записали на сервер файл");
                     e.printStackTrace();
                     ctx.writeAndFlush(new Error("Почемуто не записали на сервер файл"));
                 }
-                sendFilesListToClient(ctx);
-
             }
+
 
         }catch (IOException e){
             e.printStackTrace();
         }
         finally {
+            System.out.println("MainHandler Освобождаем msg");
             ReferenceCountUtil.release(msg);
         }
-    }
-
-    private void sendFilesListToClient(ChannelHandlerContext ctx) throws IOException {
-        String sPath = "server_storage/"+ login;
-        FilesListRezult filesListClass = new  FilesListRezult(Files.list(Paths.get(sPath)).map(p -> p.getFileName().toString()).collect(Collectors.toList()));
-        System.out.println("Готов список из "+filesListClass.getFileList().size()+"файлов");
-        ctx.writeAndFlush(filesListClass);
-
     }
 
     @Override
